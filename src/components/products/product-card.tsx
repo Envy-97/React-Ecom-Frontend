@@ -37,7 +37,7 @@ export function ProductCard({ product }: ProductCardProps) {
             <Image
               src={product.imageUrl}
               alt={product.name}
-              layout="fill"
+              fill // Updated from layout="fill"
               objectFit="cover"
               className="transition-transform duration-300 group-hover:scale-105"
               data-ai-hint={productHint}
@@ -53,9 +53,9 @@ export function ProductCard({ product }: ProductCardProps) {
       </Link>
       <CardFooter className="p-4 border-t flex justify-between items-center">
         <p className="text-lg font-bold text-primary">₹{product.price.toFixed(2)}</p>
-        <Button 
-          onClick={handleAddToCart} 
-          size="icon" 
+        <Button
+          onClick={handleAddToCart}
+          size="icon"
           className="bg-accent hover:bg-accent/90 text-accent-foreground rounded-full"
           aria-label="Add to cart"
         >
@@ -66,3 +66,4 @@ export function ProductCard({ product }: ProductCardProps) {
     </Card>
   );
 }
+
