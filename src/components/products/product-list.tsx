@@ -1,18 +1,27 @@
+
 "use client";
 
 import { useEffect, useState } from 'react';
 import type { Product } from '@/types';
 import { ProductCard } from './product-card';
-import { mockProducts } from '@/lib/mock-data'; // Using mock data
+// Removed: import { mockProducts } from '@/lib/mock-data';
 import { Skeleton } from '@/components/ui/skeleton';
 
-// Simulate API fetch
+// Fetch products from the live API
 async function fetchProducts(): Promise<Product[]> {
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      resolve(mockProducts);
-    }, 1000); // Simulate network delay
-  });
+  try {
+    const response = await fetch('http://localhost:8080/product/all');
+    if (!response.ok) {
+      console.error(`API error: ${response.status} ${response.statusText}`);
+      // You might want to throw an error here or return a specific error object
+      return [];
+    }
+    const data = await response.json();
+    return data as Product[]; // Assuming the API returns data compatible with Product[]
+  } catch (error) {
+    console.error("Failed to fetch products from API:", error);
+    return []; // Return empty array on error
+  }
 }
 
 export function ProductList() {
@@ -40,7 +49,7 @@ export function ProductList() {
   }
 
   if (products.length === 0) {
-    return <p className="text-center text-muted-foreground">No products found.</p>;
+    return <p className="text-center text-muted-foreground">No products found. Check if the backend is running and returning data.</p>;
   }
 
   return (
