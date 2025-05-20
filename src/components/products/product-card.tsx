@@ -27,11 +27,11 @@ export function ProductCard({ product }: ProductCardProps) {
     });
   };
 
-  const productHint = product.name.split(' ').slice(0, 2).join(' ').toLowerCase();
+  const productHint = product.aiHint || product.name.split(' ').slice(0, 2).join(' ').toLowerCase();
 
   return (
     <Card className="flex flex-col overflow-hidden h-full shadow-lg hover:shadow-xl transition-shadow duration-300 group">
-      <Link href={`/products/${product.id}`} className="flex flex-col flex-grow cursor-pointer"> {/* Removed contents_ to ensure proper link behavior over card */}
+      <Link href={`/products/${product.id}`} className="flex flex-col flex-grow cursor-pointer">
         <CardHeader className="p-0">
           <div className="aspect-square relative w-full overflow-hidden">
             <Image
@@ -49,7 +49,6 @@ export function ProductCard({ product }: ProductCardProps) {
           <CardDescription className="text-sm text-muted-foreground mb-2 h-10 overflow-hidden text-ellipsis">
             {product.description}
           </CardDescription>
-          {/* Price is now moved to CardFooter */}
         </CardContent>
       </Link>
       <CardFooter className="p-4 border-t flex justify-between items-center">

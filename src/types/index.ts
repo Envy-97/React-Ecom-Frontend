@@ -1,3 +1,4 @@
+
 export interface Product {
   id: string;
   name: string;
@@ -6,6 +7,7 @@ export interface Product {
   imageUrl: string;
   stock: number;
   category?: string; // Optional category
+  aiHint?: string; // Optional hint for AI image generation/selection
 }
 
 export interface CartItem extends Product {

@@ -52,7 +52,7 @@ export default async function ProductDetailPage({ params }: ProductDetailPagePro
     );
   }
   
-  const productHint = product.name.split(' ').slice(0, 2).join(' ').toLowerCase();
+  const productHint = product.aiHint || product.name.split(' ').slice(0, 2).join(' ').toLowerCase();
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -89,7 +89,6 @@ export default async function ProductDetailPage({ params }: ProductDetailPagePro
                 {product.description}
               </CardDescription>
 
-              {/* Pincode Check Section - Replaced with PincodeChecker component */}
               <PincodeChecker />
 
               <div>

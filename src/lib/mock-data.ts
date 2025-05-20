@@ -1,3 +1,4 @@
+
 import type { Product } from '@/types';
 
 export const mockProducts: Product[] = [
@@ -9,6 +10,7 @@ export const mockProducts: Product[] = [
     imageUrl: 'https://placehold.co/600x600.png',
     stock: 10,
     category: 'Accessories',
+    aiHint: 'silk scarf',
   },
   {
     id: '2',
@@ -18,6 +20,7 @@ export const mockProducts: Product[] = [
     imageUrl: 'https://placehold.co/600x600.png',
     stock: 5,
     category: 'Jewelry',
+    aiHint: 'moonstone jewelry',
   },
   {
     id: '3',
@@ -27,6 +30,7 @@ export const mockProducts: Product[] = [
     imageUrl: 'https://placehold.co/600x600.png',
     stock: 15,
     category: 'Stationery',
+    aiHint: 'leather journal',
   },
   {
     id: '4',
@@ -36,6 +40,7 @@ export const mockProducts: Product[] = [
     imageUrl: 'https://placehold.co/600x600.png',
     stock: 30,
     category: 'Consumables',
+    aiHint: 'herbal tea',
   },
   {
     id: '5',
@@ -45,6 +50,7 @@ export const mockProducts: Product[] = [
     imageUrl: 'https://placehold.co/600x600.png',
     stock: 20,
     category: 'Bath & Body',
+    aiHint: 'bath bombs',
   },
   {
     id: '6',
@@ -54,5 +60,6 @@ export const mockProducts: Product[] = [
     imageUrl: 'https://placehold.co/600x600.png',
     stock: 8,
     category: 'Spiritual',
+    aiHint: 'oracle cards',
   },
 ];
