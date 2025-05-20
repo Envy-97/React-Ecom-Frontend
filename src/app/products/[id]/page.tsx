@@ -34,7 +34,7 @@ async function saveGeneratedImageToDB(productId: string, imageDataUri: string, p
   try {
     const imageBlob = dataURItoBlob(imageDataUri);
     const formData = new FormData();
-    const filename = `product_${productId}_image.png`; // Or use product.imageName if available
+    const filename = `product_${productId}_image.png`; 
     formData.append('file', imageBlob, filename);
 
     const response = await fetch(`http://localhost:8080/product/${productId}/image`, { 
@@ -45,6 +45,11 @@ async function saveGeneratedImageToDB(productId: string, imageDataUri: string, p
     if (!response.ok) {
       const errorData = await response.text();
       console.error(`Backend error when saving image for ${productName} (ID: ${productId}): ${response.status} - ${errorData}`);
+      toast({
+        title: "DB Save Error",
+        description: `Could not save image for ${productName} to DB. Status: ${response.status}. ${errorData}`,
+        variant: "destructive",
+      });
       throw new Error(`Failed to save image to DB for ${productName}: ${response.status} ${errorData}`);
     }
     const responseText = await response.text();
@@ -54,17 +59,19 @@ async function saveGeneratedImageToDB(productId: string, imageDataUri: string, p
     });
   } catch (error) {
     console.error(`Error saving generated image to DB for ${productName}:`, error);
-    toast({
-      title: "DB Save Error",
-      description: `Could not save image for ${productName} to DB. ${error instanceof Error ? error.message : 'Unknown error.'}`,
-      variant: "destructive",
-    });
+    if (!(error instanceof Error && error.message.startsWith('Failed to save image to DB'))) {
+        toast({
+        title: "DB Save Error",
+        description: `Could not save image for ${productName} to DB. ${error instanceof Error ? error.message : 'Unknown error.'}`,
+        variant: "destructive",
+        });
+    }
   }
 }
 
 
 export default function ProductDetailPage({ params }: ProductDetailPageProps) {
-  const [product, setProduct] = useState<Product | null | undefined>(undefined); // undefined for initial loading state
+  const [product, setProduct] = useState<Product | null | undefined>(undefined); 
   const [currentImageUrl, setCurrentImageUrl] = useState<string | undefined>(undefined);
   const [isGeneratingImage, setIsGeneratingImage] = useState<boolean>(false);
   const [isLoadingProduct, setIsLoadingProduct] = useState<boolean>(true);
@@ -78,25 +85,21 @@ export default function ProductDetailPage({ params }: ProductDetailPageProps) {
       if (!params.id) {
         if (isMounted) {
           setIsLoadingProduct(false);
-          setProduct(null); // No ID, so product not found
+          setProduct(null); 
         }
         return;
       }
 
-      // Reset states for new product fetch
       setIsLoadingProduct(true);
       setProduct(undefined); 
-      setCurrentImageUrl(undefined); // Reset image URL
+      setCurrentImageUrl(undefined); 
       setIsGeneratingImage(false);
       setHasAttemptedGeneration(false);
       
       try {
         const response = await fetch(`http://localhost:8080/product/${params.id}`);
         if (!response.ok) {
-          if (isMounted) {
-            setProduct(null); // Product not found or API error
-            // No need to set generating/attempted here, as product itself failed to load
-          }
+          if (isMounted) setProduct(null);
           return; 
         }
         const foundProductData = await response.json();
@@ -105,16 +108,15 @@ export default function ProductDetailPage({ params }: ProductDetailPageProps) {
           const typedProduct = foundProductData as Product;
           setProduct(typedProduct);
           
-          let imageSet = false;
           // 1. Prioritize backend-provided imageData
-          if (typedProduct.imageData && typedProduct.imageType) {
+          if (typedProduct.imageData && typedProduct.imageType && typedProduct.imageData.length > 50) { // Basic check for non-empty base64
             try {
               const dataUri = `data:${typedProduct.imageType};base64,${typedProduct.imageData}`;
               if (dataUri.startsWith('data:image')) {
                 setCurrentImageUrl(dataUri);
                 setIsGeneratingImage(false);
                 setHasAttemptedGeneration(true);
-                imageSet = true;
+                return; // Image found from backend
               } else {
                 console.warn(`Product ${typedProduct.id} (detail) has invalid imageType or imageData.`);
               }
@@ -123,35 +125,20 @@ export default function ProductDetailPage({ params }: ProductDetailPageProps) {
             }
           }
 
-          // 2. Fallback to product.imageUrl
-          if (!imageSet) {
-            const hasValidUserProvidedUrl = typedProduct.imageUrl && typedProduct.imageUrl !== '' && !typedProduct.imageUrl.startsWith('https://placehold.co') && !typedProduct.imageUrl.startsWith('data:');
-            if (hasValidUserProvidedUrl) {
-              setCurrentImageUrl(typedProduct.imageUrl);
-              setIsGeneratingImage(false);
-              setHasAttemptedGeneration(true);
-              imageSet = true;
-            }
-          }
-
-          // 3. Fallback to placeholder and potential AI generation
-          if (!imageSet) {
-            setCurrentImageUrl(detailPlaceholderUrl); 
-            const productHintForGen = typedProduct.aiHint || typedProduct.name?.split(' ').slice(0, 2).join(' ').toLowerCase();
-            if (productHintForGen) { 
-                 setIsGeneratingImage(true); // This will trigger the other useEffect
-                 setHasAttemptedGeneration(false);
-            } else { 
-                 setIsGeneratingImage(false); 
-                 setHasAttemptedGeneration(true); // No hint, so mark as "attempted"
-            }
+          // 2. Fallback to placeholder and potential AI generation
+          setCurrentImageUrl(detailPlaceholderUrl); 
+          const productHintForGen = typedProduct.aiHint || typedProduct.name?.split(' ').slice(0, 2).join(' ').toLowerCase();
+          if (productHintForGen) { 
+            setIsGeneratingImage(true); 
+            setHasAttemptedGeneration(false); // Allow generation
+          } else { 
+            setIsGeneratingImage(false); 
+            setHasAttemptedGeneration(true); // No hint, so mark as "attempted"
           }
         }
       } catch (error) {
         console.error(`Failed to fetch product details for ${params.id}:`, error);
-        if (isMounted) {
-          setProduct(null); // Error fetching
-        }
+        if (isMounted) setProduct(null);
       } finally {
         if (isMounted) setIsLoadingProduct(false);
       }
@@ -162,23 +149,21 @@ export default function ProductDetailPage({ params }: ProductDetailPageProps) {
 
   const productHint = product?.aiHint || product?.name?.split(' ').slice(0, 2).join(' ').toLowerCase();
 
-  // This useEffect handles AI image generation if `isGeneratingImage` is true
   const loadImageWithAI = useCallback(async () => {
     if (!product || !productHint || hasAttemptedGeneration || !isGeneratingImage) {
       if (isGeneratingImage) setIsGeneratingImage(false);
       return;
     }
     
-    setHasAttemptedGeneration(true); // Mark as attempted once we start
+    setHasAttemptedGeneration(true);
 
     try {
       const result = await generateProductImage({ aiHint: productHint });
       if (result.imageDataUri) {
         setCurrentImageUrl(result.imageDataUri);
-        // Attempt to save the newly generated image to DB
         await saveGeneratedImageToDB(product.id, result.imageDataUri, product.name); 
       } else {
-        // If generation returns null, toast/log handled in flow, keep placeholder
+        // Toast for generation failure handled in flow
       }
     } catch (error) {
       console.error(`Failed to generate image for ${product.name}:`, error);
@@ -188,20 +173,24 @@ export default function ProductDetailPage({ params }: ProductDetailPageProps) {
         variant: "destructive",
       });
     } finally {
-      setIsGeneratingImage(false); // Always turn off loading state after attempt
+      setIsGeneratingImage(false);
     }
   }, [product, productHint, isGeneratingImage, hasAttemptedGeneration]);
 
   useEffect(() => {
-    if (isGeneratingImage && product && productHint && !hasAttemptedGeneration) {
-      const timer = setTimeout(() => { // Debounce slightly
-          loadImageWithAI();
+    let isMounted = true;
+    if (isGeneratingImage && product && productHint && !hasAttemptedGeneration && isMounted) {
+      const timer = setTimeout(() => { 
+          if(isMounted) loadImageWithAI();
       }, 200); 
-      return () => clearTimeout(timer);
-    } else if (product && !productHint && isGeneratingImage) {
-        // If set to generate but no hint, turn off generation.
+      return () => {
+          isMounted = false;
+          clearTimeout(timer);
+      };
+    } else if (product && !productHint && isGeneratingImage && isMounted) {
         setIsGeneratingImage(false);
     }
+    return () => { isMounted = false; };
   }, [isGeneratingImage, product, productHint, hasAttemptedGeneration, loadImageWithAI]);
 
 
@@ -226,7 +215,7 @@ export default function ProductDetailPage({ params }: ProductDetailPageProps) {
     );
   }
 
-  if (!product) { // Product is explicitly null (not found or error)
+  if (!product) { 
     return (
       <div className="text-center py-12">
         <h1 className="text-3xl font-bold text-destructive mb-4">Product Not Found</h1>
@@ -243,9 +232,7 @@ export default function ProductDetailPage({ params }: ProductDetailPageProps) {
     );
   }
   
-  // Product is loaded. currentImageUrl should be set by one of the effects.
-  // Fallback for productForDisplay if currentImageUrl is somehow still undefined
-  const displayImageUrl = currentImageUrl || product.imageUrl || detailPlaceholderUrl;
+  const displayImageUrl = currentImageUrl || detailPlaceholderUrl;
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -266,23 +253,22 @@ export default function ProductDetailPage({ params }: ProductDetailPageProps) {
                  <ImageIcon className="h-16 w-16 text-muted-foreground/50 animate-pulse" />
               </Skeleton>
             )}
-            {/* Display image if currentImageUrl is set */}
             {displayImageUrl && (
               <Image
-                key={displayImageUrl} // Re-render if src changes significantly
+                key={displayImageUrl} 
                 src={displayImageUrl}
                 alt={product.name}
                 fill
                 sizes="(max-width: 768px) 100vw, 50vw"
                 className={`object-contain p-4 transition-opacity duration-300 ${(isGeneratingImage && displayImageUrl === detailPlaceholderUrl) ? 'opacity-70' : 'opacity-100'}`}
-                data-ai-hint={productHint} // Keep hint for potential manual regeneration etc.
+                data-ai-hint={productHint} 
                 priority={true} 
                 onError={() => {
                     console.error(`Error loading image: ${displayImageUrl} for product ${product.name}`);
-                    if (displayImageUrl !== detailPlaceholderUrl) { // Avoid loop if placeholder itself fails
+                    if (displayImageUrl !== detailPlaceholderUrl) { 
                         setCurrentImageUrl(detailPlaceholderUrl); 
                     }
-                    if(isGeneratingImage) setIsGeneratingImage(false); // Stop generation if image error occurs
+                    if(isGeneratingImage) setIsGeneratingImage(false);
                 }}
               />
             )}
@@ -309,8 +295,8 @@ export default function ProductDetailPage({ params }: ProductDetailPageProps) {
               </div>
             </CardContent>
             <CardFooter className="p-6 border-t mt-auto">
-              {/* Pass the product object that might have updated currentImageUrl */}
-              <ProductDetailClient product={{...product, imageUrl: displayImageUrl}} />
+              {/* Pass the product object with potentially updated currentImageUrl */}
+              <ProductDetailClient product={{...product, imageUrl: displayImageUrl }} />
             </CardFooter>
           </div>
         </div>
