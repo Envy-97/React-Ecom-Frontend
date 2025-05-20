@@ -19,6 +19,7 @@ export function ProductCard({ product }: ProductCardProps) {
 
   const handleAddToCart = (e: React.MouseEvent<HTMLButtonElement>) => {
     e.stopPropagation(); // Prevent navigation when button is clicked
+    e.preventDefault(); // Also prevent default link behavior if any confusion
     addToCart(product);
     toast({
       title: `${product.name} added to cart!`,
@@ -30,7 +31,7 @@ export function ProductCard({ product }: ProductCardProps) {
 
   return (
     <Card className="flex flex-col overflow-hidden h-full shadow-lg hover:shadow-xl transition-shadow duration-300 group">
-      <Link href={`/products/${product.id}`} className="flex flex-col flex-grow contents_cursor-pointer"> {/* Use contents for better layout control if needed, or remove for default block behavior */}
+      <Link href={`/products/${product.id}`} className="flex flex-col flex-grow cursor-pointer"> {/* Removed contents_ to ensure proper link behavior over card */}
         <CardHeader className="p-0">
           <div className="aspect-square relative w-full overflow-hidden">
             <Image
@@ -48,12 +49,19 @@ export function ProductCard({ product }: ProductCardProps) {
           <CardDescription className="text-sm text-muted-foreground mb-2 h-10 overflow-hidden text-ellipsis">
             {product.description}
           </CardDescription>
-          <p className="text-lg font-bold text-primary">₹{product.price.toFixed(2)}</p>
+          {/* Price is now moved to CardFooter */}
         </CardContent>
       </Link>
-      <CardFooter className="p-4 border-t">
-        <Button onClick={handleAddToCart} className="w-full bg-accent hover:bg-accent/90 text-accent-foreground">
-          <ShoppingCart className="mr-2 h-4 w-4" /> Add to Cart
+      <CardFooter className="p-4 border-t flex justify-between items-center">
+        <p className="text-lg font-bold text-primary">₹{product.price.toFixed(2)}</p>
+        <Button 
+          onClick={handleAddToCart} 
+          size="icon" 
+          className="bg-accent hover:bg-accent/90 text-accent-foreground rounded-full"
+          aria-label="Add to cart"
+        >
+          <ShoppingCart className="h-4 w-4" />
+          <span className="sr-only">Add to Cart</span>
         </Button>
       </CardFooter>
     </Card>
