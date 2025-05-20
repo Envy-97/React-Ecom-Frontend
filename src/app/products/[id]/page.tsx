@@ -6,8 +6,10 @@ import { mockProducts } from '@/lib/mock-data';
 import type { Product } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { ChevronLeft, ShoppingCart } from 'lucide-react';
+import { ChevronLeft } from 'lucide-react'; // ShoppingCart is in ProductDetailClient
 import { ProductDetailClient } from '@/components/products/product-detail-client';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 
 interface ProductDetailPageProps {
   params: { id: string };
@@ -70,9 +72,9 @@ export default async function ProductDetailPage({ params }: ProductDetailPagePro
             <Image
               src={product.imageUrl}
               alt={product.name}
-              layout="fill"
-              objectFit="contain" // Use contain to see the whole image, or cover
-              className="p-4" // Add some padding around the image
+              fill // Replaced layout="fill" and objectFit="contain" with fill and object-contain
+              objectFit="contain" // Ensure this is a valid prop for next/image with fill
+              className="p-4" 
               data-ai-hint={productHint} 
             />
           </div>
@@ -87,6 +89,30 @@ export default async function ProductDetailPage({ params }: ProductDetailPagePro
               <CardDescription className="text-base lg:text-lg leading-relaxed text-foreground/90">
                 {product.description}
               </CardDescription>
+
+              {/* Pincode Check Section */}
+              <div className="space-y-2 pt-4 border-t">
+                <Label htmlFor="pincode" className="font-semibold text-sm">Check Delivery Availability</Label>
+                <div className="flex items-center space-x-2">
+                  <Input 
+                    type="text" 
+                    id="pincode" 
+                    name="pincode" 
+                    placeholder="Enter Pincode" 
+                    className="max-w-[180px] h-9 text-sm" // Adjusted width and height
+                    maxLength={6} 
+                    pattern="\d{6}" // Basic pattern for 6 digits
+                    title="Please enter a 6-digit pincode"
+                  />
+                  <Button variant="outline" type="button" size="sm">Check</Button>
+                </div>
+                 {/* Placeholder for delivery message - uncomment and style as needed 
+                 <p id="delivery-message" className="text-xs text-muted-foreground mt-1">
+                   Standard delivery in 3-5 days.
+                 </p> 
+                 */}
+              </div>
+
               <div>
                 <p className="text-3xl lg:text-4xl font-extrabold text-accent mb-1">₹{product.price.toFixed(2)}</p>
                 <p className="text-sm text-green-600 font-semibold">
