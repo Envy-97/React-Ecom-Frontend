@@ -19,19 +19,48 @@ interface ProductCardProps {
 
 export function ProductCard({ product }: ProductCardProps) {
   const { addToCart } = useCart();
-  const [currentImageUrl, setCurrentImageUrl] = useState<string>(product.imageUrl);
-  const [isGeneratingImage, setIsGeneratingImage] = useState<boolean>(true); // Start true to show loader initially
-
+  
+  const placeholderUrl = `https://placehold.co/600x600.png`;
   const productHint = product.aiHint || product.name.split(' ').slice(0, 2).join(' ').toLowerCase();
+
+  // Determine if the provided imageUrl is valid and not a placeholder
+  const hasGoodProvidedUrl = product.imageUrl && product.imageUrl !== '' && !product.imageUrl.startsWith('https://placehold.co');
+  
+  const [currentImageUrl, setCurrentImageUrl] = useState<string>(
+    hasGoodProvidedUrl ? product.imageUrl : placeholderUrl
+  );
+  
+  // Generate if no good URL is provided AND a hint exists
+  const [isGeneratingImage, setIsGeneratingImage] = useState<boolean>(
+    !hasGoodProvidedUrl && !!productHint 
+  );
 
   useEffect(() => {
     let isMounted = true;
-    // Set initial loading state based on whether we have a hint to generate an image
-    setIsGeneratingImage(!!productHint);
 
-    async function loadImageWithAI() { // Corrected: Added space here
-      if (!productHint) {
-        setIsGeneratingImage(false); // No hint, so no generation needed
+    // Re-evaluate based on product prop changes
+    const newHasGoodProvidedUrl = product.imageUrl && product.imageUrl !== '' && !product.imageUrl.startsWith('https://placehold.co');
+    const newBaseImageUrl = newHasGoodProvidedUrl ? product.imageUrl : placeholderUrl;
+    const newNeedsAiGeneration = !newHasGoodProvidedUrl && !!productHint;
+
+    // If AI image not yet loaded, update current image and generation status
+    if (!currentImageUrl.startsWith('data:image')) {
+      if (currentImageUrl !== newBaseImageUrl) {
+        setCurrentImageUrl(newBaseImageUrl);
+      }
+      if (isGeneratingImage !== newNeedsAiGeneration) {
+        setIsGeneratingImage(newNeedsAiGeneration);
+      }
+    } else {
+      // AI image is loaded. Only turn off generation flag if it was true but no longer needed.
+      if (isGeneratingImage && !newNeedsAiGeneration) {
+         setIsGeneratingImage(false);
+      }
+    }
+
+    async function loadImageWithAI() {
+      if (!productHint) { // Should not happen if isGeneratingImage is true
+        if(isMounted) setIsGeneratingImage(false);
         return;
       }
 
@@ -42,7 +71,7 @@ export function ProductCard({ product }: ProductCardProps) {
         }
       } catch (error) {
         console.error(`Failed to generate image for ${product.name}:`, error);
-        // If generation fails, keep the placeholder. isGeneratingImage will be set to false in finally.
+        // On failure, currentImageUrl (placeholder) remains
       } finally {
         if (isMounted) {
           setIsGeneratingImage(false);
@@ -50,17 +79,18 @@ export function ProductCard({ product }: ProductCardProps) {
       }
     }
     
-    // Use a small timeout to allow initial placeholders to render before kicking off generation
-    const timer = setTimeout(() => {
-      loadImageWithAI();
-    }, 200);
-
-
-    return () => {
-      isMounted = false;
-      clearTimeout(timer);
-    };
-  }, [product.name, productHint]);
+    if (isGeneratingImage) { // If flag indicates generation is needed
+      const timer = setTimeout(() => {
+        loadImageWithAI();
+      }, 200);
+      return () => {
+        isMounted = false;
+        clearTimeout(timer);
+      };
+    }
+    
+    return () => { isMounted = false; };
+  }, [product.name, product.imageUrl, productHint, isGeneratingImage, currentImageUrl]);
 
 
   const handleAddToCart = (e: React.MouseEvent<HTMLButtonElement>) => {
@@ -84,27 +114,24 @@ export function ProductCard({ product }: ProductCardProps) {
               </Skeleton>
             )}
             <Image
-              key={currentImageUrl} // Add key to force re-render if currentImageUrl changes (e.g. from placeholder to data URI)
+              key={currentImageUrl}
               src={currentImageUrl}
               alt={product.name}
               fill
               sizes="(max-width: 640px) 100vw, (max-width: 768px) 50vw, (max-width: 1024px) 33vw, 25vw"
-              className={`object-cover transition-opacity duration-300 group-hover:scale-105 ${isGeneratingImage && currentImageUrl === product.imageUrl ? 'opacity-70' : 'opacity-100'}`}
+              className={`object-cover transition-opacity duration-300 group-hover:scale-105 ${isGeneratingImage && currentImageUrl === placeholderUrl ? 'opacity-70' : 'opacity-100'}`}
               data-ai-hint={productHint}
               onLoadingComplete={() => {
-                // If the loaded image is the initial placeholder, and we were not trying to generate (no hint), stop loading state.
-                if (currentImageUrl === product.imageUrl && !productHint) {
-                    setIsGeneratingImage(false);
+                if (currentImageUrl === placeholderUrl && !isGeneratingImage) {
+                    // Placeholder loaded, and no AI generation was intended or it finished (and possibly failed, leaving placeholder)
                 }
-                // If it's the generated image that just loaded, isGeneratingImage would have been set to false by the flow's finally block.
               }}
               onError={() => {
                 console.error(`Error loading image: ${currentImageUrl} for product ${product.name}`);
-                // If the generated image fails to load from its data URI, revert to placeholder
-                if (currentImageUrl !== product.imageUrl) {
-                    setCurrentImageUrl(product.imageUrl);
+                if (currentImageUrl !== placeholderUrl) { // If error on AI image or provided URL
+                    setCurrentImageUrl(placeholderUrl); // Fallback to placeholder
                 }
-                setIsGeneratingImage(false); // Stop loading state on error
+                if(isGeneratingImage) setIsGeneratingImage(false); 
               }}
             />
           </div>
@@ -116,11 +143,12 @@ export function ProductCard({ product }: ProductCardProps) {
           </CardDescription>
         </CardContent>
       </Link>
-      <CardFooter className="p-4 border-t flex justify-between items-center">
+      <CardFooter className="p-4 border-t flex justify-between items-center mt-auto">
         <p className="text-lg font-bold text-primary">₹{product.price.toFixed(2)}</p>
         <Button
           onClick={handleAddToCart}
           size="icon"
+          variant="default"
           className="bg-accent hover:bg-accent/90 text-accent-foreground rounded-full"
           aria-label="Add to cart"
         >

@@ -3,7 +3,6 @@
 
 import Image from 'next/image';
 import Link from 'next/link';
-// Removed: import { mockProducts } from '@/lib/mock-data';
 import type { Product } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -21,54 +20,68 @@ interface ProductDetailPageProps {
 export default function ProductDetailPage({ params }: ProductDetailPageProps) {
   const [product, setProduct] = useState<Product | null | undefined>(undefined);
   const [currentImageUrl, setCurrentImageUrl] = useState<string | undefined>(undefined);
-  const [isGeneratingImage, setIsGeneratingImage] = useState<boolean>(true);
+  const [isGeneratingImage, setIsGeneratingImage] = useState<boolean>(false); // Default to false, determined after fetch
   const [isLoadingProduct, setIsLoadingProduct] = useState<boolean>(true);
 
-  useEffect(() => {
+  useEffect(() => { // Effect for fetching product data
     let isMounted = true;
     async function fetchProductDetails() {
       if (!params.id) {
         setIsLoadingProduct(false);
-        setProduct(null); // No ID, no product
+        setProduct(null);
         return;
       }
 
       setIsLoadingProduct(true);
-      setProduct(undefined); // Set to undefined while fetching to distinguish from null (not found)
-      setCurrentImageUrl(undefined);
-      setIsGeneratingImage(true); // Assume we'll try to generate an image
-
+      setProduct(undefined); 
+      setCurrentImageUrl(undefined); // Reset
+      // isGeneratingImage will be determined AFTER fetch
+      
       try {
         const response = await fetch(`http://localhost:8080/product/${params.id}`);
         if (!response.ok) {
           if (isMounted) {
             if (response.status === 404) {
-              setProduct(null); // Explicitly set to null for "Not Found"
+              setProduct(null);
             } else {
               console.error(`API error fetching product ${params.id}: ${response.status} ${response.statusText}`);
-              setProduct(null); // Treat other errors as "not found" for simplicity here
+              setProduct(null);
             }
             setIsGeneratingImage(false); // No product, no image to generate
           }
-          return; // Exit if response not ok
+          return; 
         }
         const foundProductData = await response.json();
         
         if (isMounted) {
           const typedProduct = foundProductData as Product;
           setProduct(typedProduct);
-          if (typedProduct && typedProduct.imageUrl) { // Ensure imageUrl exists
-            setCurrentImageUrl(typedProduct.imageUrl); 
-            setIsGeneratingImage(!!(typedProduct.aiHint || typedProduct.name));
-          } else if (typedProduct) { // Product exists but no imageUrl, use placeholder
-            const placeholderUrl = `https://placehold.co/600x400.png`; // Default placeholder
-            setCurrentImageUrl(placeholderUrl);
-            typedProduct.imageUrl = placeholderUrl; // Assign placeholder to product object for consistency
-            setIsGeneratingImage(!!(typedProduct.aiHint || typedProduct.name));
-          } else {
-            setProduct(null); // If data is not as expected
-            setIsGeneratingImage(false);
+
+          const placeholderUrl = `https://placehold.co/600x400.png`;
+          let initialDisplayUrl = placeholderUrl; 
+          let attemptGeneration = false;
+
+          if (typedProduct && typedProduct.imageUrl && typedProduct.imageUrl !== '' && !typedProduct.imageUrl.startsWith('https://placehold.co')) {
+            initialDisplayUrl = typedProduct.imageUrl;
+            attemptGeneration = false;
+          } else if (typedProduct) { // imageUrl is empty, placeholder, or missing
+            initialDisplayUrl = placeholderUrl; 
+            // Attempt generation if hint exists
+            if (typedProduct.aiHint || typedProduct.name) {
+                 attemptGeneration = true;
+            }
+            // Ensure product object has a placeholder if its own imageUrl was empty or a placeholder, for consistency
+            // This is useful if AI generation fails and ProductDetailClient needs an imageUrl
+             if (!typedProduct.imageUrl || typedProduct.imageUrl === '' || typedProduct.imageUrl.startsWith('https://placehold.co')) {
+                typedProduct.imageUrl = placeholderUrl; 
+            }
+          } else { // Product not found or malformed from API
+            setProduct(null); // Explicitly set to null
+            attemptGeneration = false;
           }
+          
+          setCurrentImageUrl(initialDisplayUrl);
+          setIsGeneratingImage(attemptGeneration); // This flag triggers the image generation useEffect
         }
       } catch (error) {
         console.error(`Failed to fetch product details for ${params.id}:`, error);
@@ -77,9 +90,7 @@ export default function ProductDetailPage({ params }: ProductDetailPageProps) {
           setIsGeneratingImage(false);
         }
       } finally {
-        if (isMounted) {
-          setIsLoadingProduct(false);
-        }
+        if (isMounted) setIsLoadingProduct(false);
       }
     }
     fetchProductDetails();
@@ -88,52 +99,45 @@ export default function ProductDetailPage({ params }: ProductDetailPageProps) {
 
   const productHint = product?.aiHint || product?.name?.split(' ').slice(0, 2).join(' ').toLowerCase();
 
-  useEffect(() => {
+  useEffect(() => { // Effect for AI image generation
     let isMounted = true;
-    if (product && productHint && product.imageUrl !== currentImageUrl) { // Only generate if we have a hint and current is placeholder
-      // isGeneratingImage should already be true from product load if hint exists
+    // This effect runs if isGeneratingImage is true AND product/hint are available
+    if (product && productHint && isGeneratingImage) {
       async function loadImageWithAI() {
         try {
-          // Ensure product.imageUrl is the placeholder before generating
-          // This check might be redundant if currentImageUrl is properly managed
-          if (isGeneratingImage) { 
-            const result = await generateProductImage({ aiHint: productHint });
-            if (isMounted && result.imageDataUri) {
-              setCurrentImageUrl(result.imageDataUri);
-            }
+          // currentImageUrl is already set to placeholder, AI will replace it
+          const result = await generateProductImage({ aiHint: productHint });
+          if (isMounted && result.imageDataUri) {
+            setCurrentImageUrl(result.imageDataUri);
           }
+          // If result.imageDataUri is null, currentImageUrl remains the placeholder
         } catch (error) {
           console.error(`Failed to generate image for ${product.name}:`, error);
-          // If AI generation fails, currentImageUrl should remain the placeholder
+          // On error, currentImageUrl remains the placeholder
         } finally {
           if (isMounted) {
-            setIsGeneratingImage(false);
+            setIsGeneratingImage(false); // Generation attempt is complete
           }
         }
       }
-      // Use a small timeout to allow initial placeholders to render before kicking off generation
-      // Only generate if the currentImageUrl is indeed the placeholder
-      if (currentImageUrl === product.imageUrl || currentImageUrl?.startsWith('https://placehold.co')) {
-        const timer = setTimeout(() => {
-            loadImageWithAI();
-        }, 200);
-        return () => {
-            isMounted = false;
-            clearTimeout(timer);
-        };
-      } else {
-         // If currentImageUrl is already an AI image, or if no hint, don't regenerate
-         if (isMounted) setIsGeneratingImage(false);
-      }
-
-    } else if (product) { // Product loaded but no hint or AI image already loaded
-        if (isMounted) setIsGeneratingImage(false);
+      
+      const timer = setTimeout(() => {
+          loadImageWithAI();
+      }, 200); // Small delay to allow placeholder to render first
+      
+      return () => { 
+        isMounted = false; 
+        clearTimeout(timer);
+      };
+    } else if (isGeneratingImage && (!product || !productHint)) {
+      // If it was set to generate, but product/hint became unavailable (e.g. product fetch failed after initial decision)
+      if (isMounted) setIsGeneratingImage(false);
     }
-    // Cleanup for the effect itself
+    
     return () => { isMounted = false; };
-  }, [product, productHint, currentImageUrl]); // Added currentImageUrl dependency
+  }, [product, productHint, isGeneratingImage]);
 
-  if (isLoadingProduct || product === undefined) { // Show skeleton if loading or product is undefined (initial fetch state)
+  if (isLoadingProduct || product === undefined) { 
     return (
       <div className="container mx-auto px-4 py-8">
         <Skeleton className="h-8 w-48 mb-6 rounded-md" />
@@ -154,7 +158,7 @@ export default function ProductDetailPage({ params }: ProductDetailPageProps) {
     );
   }
 
-  if (!product) { // product is null, meaning not found or error
+  if (!product) { 
     return (
       <div className="text-center py-12">
         <h1 className="text-3xl font-bold text-destructive mb-4">Product Not Found</h1>
@@ -185,35 +189,34 @@ export default function ProductDetailPage({ params }: ProductDetailPageProps) {
       <Card className="overflow-hidden shadow-xl">
         <div className="grid md:grid-cols-2 gap-0">
           <div className="relative aspect-square md:aspect-auto md:min-h-[400px] min-h-[300px] bg-muted/20">
-            {(isGeneratingImage || !currentImageUrl) && ( // Show skeleton if generating or URL not yet set
+            {(isGeneratingImage || !currentImageUrl) && ( 
               <Skeleton className="absolute inset-0 h-full w-full flex items-center justify-center z-10">
                  <ImageIcon className="h-16 w-16 text-muted-foreground/50 animate-pulse" />
               </Skeleton>
             )}
             {currentImageUrl && (
               <Image
-                key={currentImageUrl} // Force re-render on src change
+                key={currentImageUrl} 
                 src={currentImageUrl}
                 alt={product.name}
                 fill
                 sizes="(max-width: 768px) 100vw, 50vw"
-                className={`object-contain p-4 transition-opacity duration-300 ${isGeneratingImage && currentImageUrl === product.imageUrl ? 'opacity-70' : 'opacity-100'}`}
+                className={`object-contain p-4 transition-opacity duration-300 ${isGeneratingImage && currentImageUrl === product.imageUrl && currentImageUrl.startsWith('https://placehold.co') ? 'opacity-70' : 'opacity-100'}`}
                 data-ai-hint={productHint}
-                priority={true} // Prioritize loading this image as it's LCP
+                priority={true} 
                 onLoadingComplete={() => {
-                    // If currentImageUrl is the fetched placeholder AND there's no hint, generation is done.
-                    if (currentImageUrl === product.imageUrl && !productHint) {
-                        setIsGeneratingImage(false);
+                    // If currentImageUrl is the original product.imageUrl (placeholder) AND AI generation is not active (finished or not started)
+                    if (currentImageUrl === product.imageUrl && !isGeneratingImage) {
+                        // Placeholder loaded, and AI is done or wasn't needed.
                     }
-                    // If an AI image was loaded, isGeneratingImage would be set false by its flow's `finally` block.
                 }}
                 onError={() => {
                     console.error(`Error loading image: ${currentImageUrl} for product ${product.name}`);
-                    // If the current (potentially AI-generated) URL fails, fall back to original product.imageUrl
+                    // If the current (potentially AI-generated or direct) URL fails, fall back to original product.imageUrl (which should be a placeholder if direct one failed)
                     if (product.imageUrl && currentImageUrl !== product.imageUrl) {
                         setCurrentImageUrl(product.imageUrl); 
                     }
-                    setIsGeneratingImage(false); // Stop generation attempts on error
+                    if(isGeneratingImage) setIsGeneratingImage(false); 
                 }}
               />
             )}
@@ -240,7 +243,8 @@ export default function ProductDetailPage({ params }: ProductDetailPageProps) {
               </div>
             </CardContent>
             <CardFooter className="p-6 border-t mt-auto">
-              <ProductDetailClient product={product} />
+              {/* Ensure product passed to ProductDetailClient has an imageUrl, even if it's the placeholder */}
+              <ProductDetailClient product={{...product, imageUrl: product.imageUrl || `https://placehold.co/600x400.png` }} />
             </CardFooter>
           </div>
         </div>
