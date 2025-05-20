@@ -18,14 +18,29 @@ interface ProductDetailPageProps {
   params: { id: string };
 }
 
+// Helper function to convert data URI to Blob
+const dataURItoBlob = (dataURI: string): Blob => {
+  const byteString = atob(dataURI.split(',')[1]);
+  const mimeString = dataURI.split(',')[0].split(':')[1].split(';')[0];
+  const ab = new ArrayBuffer(byteString.length);
+  const ia = new Uint8Array(ab);
+  for (let i = 0; i < byteString.length; i++) {
+    ia[i] = byteString.charCodeAt(i);
+  }
+  return new Blob([ab], { type: mimeString });
+};
+
 async function saveGeneratedImageToDB(productId: string, imageDataUri: string, productName: string) {
   try {
+    const imageBlob = dataURItoBlob(imageDataUri);
+    const formData = new FormData();
+    const filename = `product_${productId}_image.png`; // Example filename
+    formData.append('file', imageBlob, filename);
+
     const response = await fetch(`http://localhost:8080/product/${productId}/image`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ imageDataUri: imageDataUri }),
+      // Content-Type header is automatically set by the browser when using FormData
+      body: formData,
     });
 
     if (!response.ok) {
@@ -34,7 +49,7 @@ async function saveGeneratedImageToDB(productId: string, imageDataUri: string, p
     }
     toast({
       title: "Image Saved to DB",
-      description: `Generated image for ${productName} sent to database.`,
+      description: `Generated image for ${productName} uploaded to database.`,
     });
   } catch (error) {
     console.error(`Error saving generated image to DB for ${productName}:`, error);
@@ -70,15 +85,16 @@ export default function ProductDetailPage({ params }: ProductDetailPageProps) {
       setIsLoadingProduct(true);
       setProduct(undefined); 
       setCurrentImageUrl(undefined);
-      setIsGeneratingImage(false);
-      setHasAttemptedGeneration(false);
+      // setIsGeneratingImage(false); // This will be set based on fetched data
+      // setHasAttemptedGeneration(false); // Reset for new product
       
       try {
         const response = await fetch(`http://localhost:8080/product/${params.id}`);
         if (!response.ok) {
           if (isMounted) {
             setProduct(null);
-            // No need to set isGeneratingImage here, handled by subsequent effects
+            setIsGeneratingImage(false); 
+            setHasAttemptedGeneration(true); 
           }
           return; 
         }
@@ -87,6 +103,7 @@ export default function ProductDetailPage({ params }: ProductDetailPageProps) {
         if (isMounted) {
           const typedProduct = foundProductData as Product;
           setProduct(typedProduct);
+          setHasAttemptedGeneration(false); // Reset for potentially new generation attempt
 
           const hasValidUserProvidedUrl = typedProduct.imageUrl && typedProduct.imageUrl !== '' && !typedProduct.imageUrl.startsWith('https://placehold.co');
           const productHintForGen = typedProduct.aiHint || typedProduct.name?.split(' ').slice(0, 2).join(' ').toLowerCase();
@@ -94,20 +111,20 @@ export default function ProductDetailPage({ params }: ProductDetailPageProps) {
           if (hasValidUserProvidedUrl) {
             setCurrentImageUrl(typedProduct.imageUrl);
             setIsGeneratingImage(false);
-            setHasAttemptedGeneration(true); // No generation needed if valid URL exists
+            setHasAttemptedGeneration(true); 
           } else {
-            // Is empty or a placeholder, use placeholder and potentially generate
             setCurrentImageUrl(detailPlaceholderUrl);
-            // Update product's imageUrl to placeholder if it was empty, for ProductDetailClient
             if (!typedProduct.imageUrl || typedProduct.imageUrl === '') {
-                typedProduct.imageUrl = detailPlaceholderUrl;
+                // This mutation is temporary for client-side display if AI fails.
+                // The original product object fetched from API remains unchanged for ProductDetailClient.
+                // Consider cloning product if you need to modify it more extensively for state.
             }
-            if (productHintForGen) { // Only set to generate if hint exists
+            if (productHintForGen) {
                  setIsGeneratingImage(true);
                  // hasAttemptedGeneration remains false, will be set by generation effect
             } else {
-                 setIsGeneratingImage(false); // No hint, no generation
-                 setHasAttemptedGeneration(true); // Mark as not needing generation
+                 setIsGeneratingImage(false); 
+                 setHasAttemptedGeneration(true); 
             }
           }
         }
@@ -115,8 +132,8 @@ export default function ProductDetailPage({ params }: ProductDetailPageProps) {
         console.error(`Failed to fetch product details for ${params.id}:`, error);
         if (isMounted) {
           setProduct(null);
-          setIsGeneratingImage(false); // Ensure this is off on fetch error
-          setHasAttemptedGeneration(true); // Don't attempt generation if product fetch fails
+          setIsGeneratingImage(false); 
+          setHasAttemptedGeneration(true); 
         }
       } finally {
         if (isMounted) setIsLoadingProduct(false);
@@ -134,16 +151,15 @@ export default function ProductDetailPage({ params }: ProductDetailPageProps) {
       return;
     }
 
-    setHasAttemptedGeneration(true); // Mark that we are attempting generation
+    setHasAttemptedGeneration(true); 
 
     try {
-      // currentImageUrl is already set to placeholder
       const result = await generateProductImage({ aiHint: productHint });
       if (result.imageDataUri) {
         setCurrentImageUrl(result.imageDataUri);
         await saveGeneratedImageToDB(product.id, result.imageDataUri, product.name);
       } else {
-        // Placeholder remains
+        // Placeholder remains if imageDataUri is null
       }
     } catch (error) {
       console.error(`Failed to generate image for ${product.name}:`, error);
@@ -153,11 +169,12 @@ export default function ProductDetailPage({ params }: ProductDetailPageProps) {
         variant: "destructive",
       });
     } finally {
-      setIsGeneratingImage(false); // Generation attempt is complete
+      setIsGeneratingImage(false); 
     }
   }, [product, productHint, isGeneratingImage, hasAttemptedGeneration]);
 
   useEffect(() => {
+    // This effect now correctly waits for product to be loaded and generation conditions to be met.
     if (isGeneratingImage && product && productHint && !hasAttemptedGeneration) {
       const timer = setTimeout(() => {
           loadImageWithAI();
@@ -205,7 +222,6 @@ export default function ProductDetailPage({ params }: ProductDetailPageProps) {
     );
   }
   
-  // Ensure product passed to ProductDetailClient has an imageUrl, using current one if available, else placeholder
   const productForDetailClient = {
     ...product,
     imageUrl: currentImageUrl || product.imageUrl || detailPlaceholderUrl,
@@ -225,12 +241,12 @@ export default function ProductDetailPage({ params }: ProductDetailPageProps) {
       <Card className="overflow-hidden shadow-xl">
         <div className="grid md:grid-cols-2 gap-0">
           <div className="relative aspect-square md:aspect-auto md:min-h-[400px] min-h-[300px] bg-muted/20">
-            {(isGeneratingImage || !currentImageUrl) && ( 
+            {(isGeneratingImage || (!currentImageUrl && !hasAttemptedGeneration && product )) && ( 
               <Skeleton className="absolute inset-0 h-full w-full flex items-center justify-center z-10">
                  <ImageIcon className="h-16 w-16 text-muted-foreground/50 animate-pulse" />
               </Skeleton>
             )}
-            {currentImageUrl && (
+            {currentImageUrl && ( // Only render Image if currentImageUrl is set
               <Image
                 key={currentImageUrl} 
                 src={currentImageUrl}
@@ -272,7 +288,10 @@ export default function ProductDetailPage({ params }: ProductDetailPageProps) {
               </div>
             </CardContent>
             <CardFooter className="p-6 border-t mt-auto">
-              <ProductDetailClient product={productForDetailClient} />
+              {/* Pass the original product fetched from API to ProductDetailClient,
+                  as its imageUrl might be what the backend expects for cart operations if it serves LOBs.
+                  The currentImageUrl is for display purposes on this page. */}
+              <ProductDetailClient product={product} />
             </CardFooter>
           </div>
         </div>
@@ -280,3 +299,4 @@ export default function ProductDetailPage({ params }: ProductDetailPageProps) {
     </div>
   );
 }
+
