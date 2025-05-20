@@ -33,7 +33,7 @@ async function saveGeneratedImageToDB(productId: string, imageDataUri: string, p
   try {
     const imageBlob = dataURItoBlob(imageDataUri);
     const formData = new FormData();
-    const filename = `product_${productId}_image.png`;
+    const filename = `product_${productId}_image.png`; // Or derive from product.imageName if available
     formData.append('file', imageBlob, filename);
 
     const response = await fetch(`http://localhost:8080/product/${productId}/image`, {
@@ -43,13 +43,13 @@ async function saveGeneratedImageToDB(productId: string, imageDataUri: string, p
 
     if (!response.ok) {
       const errorData = await response.text();
-      console.error(`Backend error when saving image for ${productName} (ID: ${productId}): ${response.status} - ${errorData}`); // Enhanced logging
+      console.error(`Backend error when saving image for ${productName} (ID: ${productId}): ${response.status} - ${errorData}`);
       throw new Error(`Failed to save image to DB for ${productName}: ${response.status} ${errorData}`);
     }
-
+    const responseText = await response.text();
     toast({
       title: "Image Saved to DB",
-      description: `Generated image for ${productName} uploaded to database.`,
+      description: responseText || `Generated image for ${productName} uploaded to database.`,
     });
   } catch (error) {
     console.error(`Error saving generated image to DB for ${productName}:`, error);
@@ -72,13 +72,38 @@ export function ProductCard({ product }: ProductCardProps) {
   const [hasAttemptedGeneration, setHasAttemptedGeneration] = useState<boolean>(false);
 
   useEffect(() => {
-    const hasValidUserProvidedUrl = product.imageUrl && product.imageUrl !== '' && !product.imageUrl.startsWith('https://placehold.co');
+    let imageSet = false;
+    // 1. Prioritize backend-provided imageData
+    if (product.imageData && product.imageType) {
+      try {
+        const dataUri = `data:${product.imageType};base64,${product.imageData}`;
+        // Basic check if it might be a data URI
+        if (dataUri.startsWith('data:image')) {
+          setCurrentImageUrl(dataUri);
+          setIsGeneratingImage(false);
+          setHasAttemptedGeneration(true);
+          imageSet = true;
+        } else {
+          console.warn(`Product ${product.id} has invalid imageType or imageData format.`);
+        }
+      } catch (e) {
+        console.error(`Error constructing data URI for product ${product.id}:`, e);
+      }
+    }
+
+    // 2. Fallback to imageUrl if no valid imageData
+    if (!imageSet) {
+      const hasValidUserProvidedUrl = product.imageUrl && product.imageUrl !== '' && !product.imageUrl.startsWith('https://placehold.co') && !product.imageUrl.startsWith('data:');
+      if (hasValidUserProvidedUrl) {
+        setCurrentImageUrl(product.imageUrl);
+        setIsGeneratingImage(false);
+        setHasAttemptedGeneration(true);
+        imageSet = true;
+      }
+    }
     
-    if (hasValidUserProvidedUrl) {
-      setCurrentImageUrl(product.imageUrl);
-      setIsGeneratingImage(false);
-      setHasAttemptedGeneration(true); 
-    } else { // Empty string or placeholder URL
+    // 3. Fallback to placeholder and potential AI generation
+    if (!imageSet) {
       setCurrentImageUrl(placeholderUrl); // Show placeholder initially
       if (productHintForGen) { // If hint exists, attempt generation
         setIsGeneratingImage(true);
@@ -88,25 +113,25 @@ export function ProductCard({ product }: ProductCardProps) {
         setHasAttemptedGeneration(true); // Mark as "attempted" since no hint
       }
     }
-  }, [product.imageUrl, productHintForGen, placeholderUrl]);
+  }, [product.id, product.imageData, product.imageType, product.imageUrl, productHintForGen, placeholderUrl]);
 
   const loadImageWithAI = useCallback(async () => {
-    if (!productHintForGen || hasAttemptedGeneration) {
-      if(isGeneratingImage) setIsGeneratingImage(false);
+    if (!productHintForGen || hasAttemptedGeneration || !isGeneratingImage) {
+      if(isGeneratingImage) setIsGeneratingImage(false); // Ensure loading state is turned off if we bail early
       return;
     }
     
-    if (!isGeneratingImage) {
-      return; 
-    }
-
     setHasAttemptedGeneration(true); 
 
     try {
       const result = await generateProductImage({ aiHint: productHintForGen });
       if (result.imageDataUri) {
         setCurrentImageUrl(result.imageDataUri);
+        // Attempt to save the newly generated image to DB
         await saveGeneratedImageToDB(product.id, result.imageDataUri, product.name);
+      } else {
+        // If generation returns null, keep placeholder or whatever was there
+        // Toast is handled inside generateProductImage/save for specific errors
       }
     } catch (error) {
       console.error(`Failed to generate image for ${product.name}:`, error);
@@ -127,6 +152,7 @@ export function ProductCard({ product }: ProductCardProps) {
       }, 200); 
       return () => clearTimeout(timer);
     } else if (!productHintForGen && isGeneratingImage) {
+      // No hint, but was set to generate - turn off generation
       setIsGeneratingImage(false);
     }
   }, [isGeneratingImage, productHintForGen, hasAttemptedGeneration, loadImageWithAI]);
@@ -146,19 +172,19 @@ export function ProductCard({ product }: ProductCardProps) {
       <Link href={`/products/${product.id}`} className="flex flex-col flex-grow cursor-pointer">
         <CardHeader className="p-0">
           <div className="aspect-square relative w-full overflow-hidden bg-muted/20">
-            {(isGeneratingImage) && ( 
+            {(isGeneratingImage && currentImageUrl === placeholderUrl) && ( 
               <Skeleton className="absolute inset-0 h-full w-full flex items-center justify-center z-10">
                 <ImageIcon className="h-12 w-12 text-muted-foreground/50 animate-pulse" />
               </Skeleton>
             )}
             <Image
               key={currentImageUrl} 
-              src={currentImageUrl || placeholderUrl}
+              src={currentImageUrl} // Uses placeholderUrl by default, updated by useEffect
               alt={product.name}
               fill
               sizes="(max-width: 640px) 100vw, (max-width: 768px) 50vw, (max-width: 1024px) 33vw, 25vw"
               className={`object-cover transition-opacity duration-300 group-hover:scale-105 ${isGeneratingImage && currentImageUrl === placeholderUrl ? 'opacity-70' : 'opacity-100'}`}
-              data-ai-hint={productHintForGen}
+              data-ai-hint={productHintForGen} // Keep hint for potential manual regeneration or other AI features
               priority={false} 
               onError={() => {
                 console.error(`Error loading image: ${currentImageUrl} for product ${product.name}`);
