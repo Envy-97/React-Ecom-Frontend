@@ -1,3 +1,4 @@
+
 "use client";
 
 import Image from 'next/image';
@@ -42,7 +43,7 @@ export function ProductCard({ product }: ProductCardProps) {
         <CardDescription className="text-sm text-muted-foreground mb-2 h-10 overflow-hidden text-ellipsis">
           {product.description}
         </CardDescription>
-        <p className="text-lg font-bold text-primary">${product.price.toFixed(2)}</p>
+        <p className="text-lg font-bold text-primary">₹{product.price.toFixed(2)}</p>
       </CardContent>
       <CardFooter className="p-4 border-t">
         <Button onClick={handleAddToCart} className="w-full bg-accent hover:bg-accent/90 text-accent-foreground">

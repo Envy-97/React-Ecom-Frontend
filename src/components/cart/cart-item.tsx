@@ -1,3 +1,4 @@
+
 "use client";
 
 import Image from 'next/image';
@@ -36,7 +37,7 @@ export function CartItem({ item }: CartItemProps) {
       </div>
       <div className="flex-grow">
         <h3 className="text-lg font-semibold">{item.name}</h3>
-        <p className="text-sm text-muted-foreground">${item.price.toFixed(2)} each</p>
+        <p className="text-sm text-muted-foreground">₹{item.price.toFixed(2)} each</p>
         <div className="flex items-center space-x-2 mt-2">
           <Button variant="outline" size="icon" onClick={() => handleQuantityChange(item.quantity - 1)} disabled={item.quantity <= 1 && false}> {/* Allow decrement to 0, then remove */}
             <Minus className="h-4 w-4" />
@@ -54,7 +55,7 @@ export function CartItem({ item }: CartItemProps) {
         </div>
       </div>
       <div className="text-right">
-        <p className="text-lg font-semibold">${(item.price * item.quantity).toFixed(2)}</p>
+        <p className="text-lg font-semibold">₹{(item.price * item.quantity).toFixed(2)}</p>
         <Button variant="ghost" size="icon" onClick={handleRemove} className="text-destructive hover:text-destructive/80 mt-2">
           <X className="h-5 w-5" />
           <span className="sr-only">Remove item</span>

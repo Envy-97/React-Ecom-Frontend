@@ -1,3 +1,4 @@
+
 "use client";
 
 import Link from 'next/link';
@@ -59,7 +60,7 @@ export function CartView() {
         <CardContent className="space-y-4">
           <div className="flex justify-between">
             <span>Subtotal</span>
-            <span>${cartTotal.toFixed(2)}</span>
+            <span>₹{cartTotal.toFixed(2)}</span>
           </div>
           <div className="flex justify-between">
             <span>Shipping</span>
@@ -68,7 +69,7 @@ export function CartView() {
           <Separator />
           <div className="flex justify-between font-bold text-lg">
             <span>Total</span>
-            <span>${cartTotal.toFixed(2)}</span>
+            <span>₹{cartTotal.toFixed(2)}</span>
           </div>
         </CardContent>
         <CardFooter className="flex flex-col gap-2">

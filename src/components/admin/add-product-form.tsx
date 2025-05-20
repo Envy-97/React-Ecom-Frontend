@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, type FormEvent } from 'react';
@@ -94,7 +95,7 @@ export function AddProductForm() {
               <Input id="name" value={name} onChange={(e) => setName(e.target.value)} required disabled={isSubmitting} />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="price">Price ($)</Label>
+              <Label htmlFor="price">Price (₹)</Label>
               <Input id="price" type="number" value={price} onChange={(e) => setPrice(e.target.value)} required step="0.01" min="0" disabled={isSubmitting} />
             </div>
           </div>

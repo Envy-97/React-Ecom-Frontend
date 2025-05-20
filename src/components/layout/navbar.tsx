@@ -1,7 +1,8 @@
+
 "use client";
 
 import Link from 'next/link';
-import { ShoppingCart, User, LogOut, PlusCircle, Store } from 'lucide-react';
+import { ShoppingCart, User, LogOut, PlusCircle, Store, Package } from 'lucide-react'; // Added Package
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/use-auth';
 import { useCart } from '@/hooks/use-cart';
@@ -24,6 +25,12 @@ export function Navbar() {
           <div className="flex items-center space-x-3 sm:space-x-4">
             <Button variant="ghost" size="sm" asChild>
               <Link href="/">Home</Link>
+            </Button>
+            <Button variant="ghost" size="sm" asChild>
+              <Link href="/products">
+                {/* <Package className="h-5 w-5 mr-1 sm:mr-2" /> */} {/* Icon can be optional */}
+                Products
+              </Link>
             </Button>
             <Button variant="ghost" size="sm" asChild className="relative">
               <Link href="/cart">
