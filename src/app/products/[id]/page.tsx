@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { ChevronLeft } from 'lucide-react';
 import { ProductDetailClient } from '@/components/products/product-detail-client';
-import { PincodeChecker } from '@/components/products/pincode-checker'; // Import the new component
+import { PincodeChecker } from '@/components/products/pincode-checker';
 
 interface ProductDetailPageProps {
   params: { id: string };
@@ -72,8 +72,8 @@ export default async function ProductDetailPage({ params }: ProductDetailPagePro
               src={product.imageUrl}
               alt={product.name}
               fill 
-              objectFit="contain" 
-              className="p-4" 
+              sizes="(max-width: 768px) 100vw, 50vw"
+              className="object-contain p-4" 
               data-ai-hint={productHint} 
             />
           </div>
