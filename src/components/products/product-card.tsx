@@ -36,13 +36,14 @@ async function saveGeneratedImageToDB(productId: string, imageDataUri: string, p
     const filename = `product_${productId}_image.png`;
     formData.append('file', imageBlob, filename);
 
-    const response = await fetch(`http://localhost:8080/${productId}/image`, { // Updated URL
+    const response = await fetch(`http://localhost:8080/product/${productId}/image`, {
       method: 'POST',
       body: formData,
     });
 
     if (!response.ok) {
       const errorData = await response.text();
+      console.error(`Backend error when saving image for ${productName} (ID: ${productId}): ${response.status} - ${errorData}`); // Enhanced logging
       throw new Error(`Failed to save image to DB for ${productName}: ${response.status} ${errorData}`);
     }
 
@@ -87,7 +88,7 @@ export function ProductCard({ product }: ProductCardProps) {
         setHasAttemptedGeneration(true); // Mark as "attempted" since no hint
       }
     }
-  }, [product.imageUrl, productHintForGen, placeholderUrl]); // Removed hasAttemptedGeneration from deps to allow re-trigger on product change
+  }, [product.imageUrl, productHintForGen, placeholderUrl]);
 
   const loadImageWithAI = useCallback(async () => {
     if (!productHintForGen || hasAttemptedGeneration) {
@@ -95,7 +96,6 @@ export function ProductCard({ product }: ProductCardProps) {
       return;
     }
     
-    // Ensure isGeneratingImage is true before proceeding
     if (!isGeneratingImage) {
       return; 
     }
@@ -121,14 +121,12 @@ export function ProductCard({ product }: ProductCardProps) {
   }, [product.id, product.name, productHintForGen, isGeneratingImage, hasAttemptedGeneration]);
 
   useEffect(() => {
-    // Trigger AI image loading only if isGeneratingImage is true and no attempt has been made yet.
     if (isGeneratingImage && productHintForGen && !hasAttemptedGeneration) {
       const timer = setTimeout(() => {
         loadImageWithAI();
       }, 200); 
       return () => clearTimeout(timer);
     } else if (!productHintForGen && isGeneratingImage) {
-      // If no hint, but generation was flagged, turn it off.
       setIsGeneratingImage(false);
     }
   }, [isGeneratingImage, productHintForGen, hasAttemptedGeneration, loadImageWithAI]);

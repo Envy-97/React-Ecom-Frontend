@@ -37,13 +37,14 @@ async function saveGeneratedImageToDB(productId: string, imageDataUri: string, p
     const filename = `product_${productId}_image.png`;
     formData.append('file', imageBlob, filename);
 
-    const response = await fetch(`http://localhost:8080/${productId}/image`, { // Updated URL
+    const response = await fetch(`http://localhost:8080/product/${productId}/image`, { 
       method: 'POST',
       body: formData,
     });
 
     if (!response.ok) {
       const errorData = await response.text();
+      console.error(`Backend error when saving image for ${productName} (ID: ${productId}): ${response.status} - ${errorData}`); // Enhanced logging
       throw new Error(`Failed to save image to DB for ${productName}: ${response.status} ${errorData}`);
     }
     toast({
@@ -109,12 +110,11 @@ export default function ProductDetailPage({ params }: ProductDetailPageProps) {
             setCurrentImageUrl(typedProduct.imageUrl);
             setIsGeneratingImage(false);
             setHasAttemptedGeneration(true); 
-          } else { // Empty string or placeholder
-            setCurrentImageUrl(detailPlaceholderUrl); // Show placeholder initially
-            if (productHintForGen) { // If hint exists, attempt generation
+          } else { 
+            setCurrentImageUrl(detailPlaceholderUrl); 
+            if (productHintForGen) { 
                  setIsGeneratingImage(true);
-                 // hasAttemptedGeneration remains false, will be set by generation effect
-            } else { // No hint, no generation possible
+            } else { 
                  setIsGeneratingImage(false); 
                  setHasAttemptedGeneration(true); 
             }
@@ -143,7 +143,6 @@ export default function ProductDetailPage({ params }: ProductDetailPageProps) {
       return;
     }
     
-    // Ensure isGeneratingImage is true before proceeding
     if (!isGeneratingImage) {
       return;
     }
@@ -154,10 +153,7 @@ export default function ProductDetailPage({ params }: ProductDetailPageProps) {
       const result = await generateProductImage({ aiHint: productHint });
       if (result.imageDataUri) {
         setCurrentImageUrl(result.imageDataUri);
-        // Pass the original product name for user-facing messages
         await saveGeneratedImageToDB(product.id, result.imageDataUri, product.name); 
-      } else {
-        // Placeholder remains if imageDataUri is null
       }
     } catch (error) {
       console.error(`Failed to generate image for ${product.name}:`, error);
@@ -221,11 +217,9 @@ export default function ProductDetailPage({ params }: ProductDetailPageProps) {
     );
   }
   
-  // Create a product object for ProductDetailClient that uses the currentImageUrl
-  // for display, but keeps original product details for cart logic.
   const productForDisplay = {
-    ...product, // Spread original product details
-    imageUrl: currentImageUrl || product.imageUrl || detailPlaceholderUrl, // Prioritize currentImageUrl for display
+    ...product, 
+    imageUrl: currentImageUrl || product.imageUrl || detailPlaceholderUrl, 
   };
 
   return (
@@ -289,15 +283,6 @@ export default function ProductDetailPage({ params }: ProductDetailPageProps) {
               </div>
             </CardContent>
             <CardFooter className="p-6 border-t mt-auto">
-              {/* Pass the original product (or productForDisplay if its imageUrl is now primary) to ProductDetailClient.
-                  If your backend updates the product's main imageUrl after saving the BLOB,
-                  passing the original 'product' object might be fine if it's re-fetched or updated.
-                  For now, passing 'productForDisplay' ensures the cart uses the most up-to-date visible image.
-                  However, 'addToCart' in CartContext expects a 'Product' type, which doesn't change based on display.
-                  So, we pass the 'product' object (which has original details) to ensure cart operations use stable data.
-                  If the backend serves images via LOB, the 'imageUrl' property for the cart item should reflect that.
-                  Let's pass the original 'product' to ProductDetailClient.
-              */}
               <ProductDetailClient product={product} />
             </CardFooter>
           </div>
