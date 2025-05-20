@@ -1,3 +1,4 @@
+
 "use client";
 
 import type { CartItem, Product } from '@/types';
@@ -18,9 +19,10 @@ export const CartContext = createContext<CartContextType | undefined>(undefined)
 
 export const CartProvider = ({ children }: { children: ReactNode }) => {
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(true); // Start as true
 
   useEffect(() => {
+    // This effect runs only on the client side after mount
     try {
       const storedCartItems = localStorage.getItem('cartItems');
       if (storedCartItems) {
@@ -28,14 +30,16 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
       }
     } catch (error) {
       console.error("Failed to load cart items from localStorage", error);
+      // Clear potentially corrupted storage
       localStorage.removeItem('cartItems');
     } finally {
-      setIsLoading(false);
+      setIsLoading(false); // Set loading to false after attempting to load
     }
   }, []);
 
   useEffect(() => {
-    if (!isLoading) { // Only save to localStorage after initial load
+    // This effect saves to localStorage, only run if not loading and on client
+    if (!isLoading && typeof window !== 'undefined') { 
         try {
             localStorage.setItem('cartItems', JSON.stringify(cartItems));
         } catch (error) {
