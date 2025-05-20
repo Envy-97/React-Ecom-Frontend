@@ -19,20 +19,13 @@ interface ProductCardProps {
 
 // Helper function to convert data URI to Blob
 const dataURItoBlob = (dataURI: string): Blob => {
-  // convert base64 to raw binary data held in a string
-  // doesn't handle URLEncoded DataURIs - see SO answer #6850276 for code that does this
   const byteString = atob(dataURI.split(',')[1]);
-
-  // separate out the mime component
   const mimeString = dataURI.split(',')[0].split(':')[1].split(';')[0];
-
-  // write the bytes of the string to an ArrayBuffer
   const ab = new ArrayBuffer(byteString.length);
   const ia = new Uint8Array(ab);
   for (let i = 0; i < byteString.length; i++) {
     ia[i] = byteString.charCodeAt(i);
   }
-
   return new Blob([ab], { type: mimeString });
 };
 
@@ -40,18 +33,16 @@ async function saveGeneratedImageToDB(productId: string, imageDataUri: string, p
   try {
     const imageBlob = dataURItoBlob(imageDataUri);
     const formData = new FormData();
-    // Use a generic filename or derive one, backend might not use it if storing as LOB directly.
-    const filename = `product_${productId}_image.png`; // Example filename
+    const filename = `product_${productId}_image.png`;
     formData.append('file', imageBlob, filename);
 
-    const response = await fetch(`http://localhost:8080/product/${productId}/image`, {
+    const response = await fetch(`http://localhost:8080/${productId}/image`, { // Updated URL
       method: 'POST',
-      // Content-Type header is automatically set by the browser when using FormData
       body: formData,
     });
 
     if (!response.ok) {
-      const errorData = await response.text(); // Or response.json() if backend sends JSON error
+      const errorData = await response.text();
       throw new Error(`Failed to save image to DB for ${productName}: ${response.status} ${errorData}`);
     }
 
@@ -73,7 +64,7 @@ export function ProductCard({ product }: ProductCardProps) {
   const { addToCart } = useCart();
   
   const placeholderUrl = `https://placehold.co/600x600.png`;
-  const productHint = product.aiHint || product.name.split(' ').slice(0, 2).join(' ').toLowerCase();
+  const productHintForGen = product.aiHint || product.name?.split(' ').slice(0, 2).join(' ').toLowerCase();
 
   const [currentImageUrl, setCurrentImageUrl] = useState<string>(placeholderUrl);
   const [isGeneratingImage, setIsGeneratingImage] = useState<boolean>(false);
@@ -86,27 +77,33 @@ export function ProductCard({ product }: ProductCardProps) {
       setCurrentImageUrl(product.imageUrl);
       setIsGeneratingImage(false);
       setHasAttemptedGeneration(true); 
-    } else {
-      setCurrentImageUrl(placeholderUrl);
-      if (productHint && !hasAttemptedGeneration) {
+    } else { // Empty string or placeholder URL
+      setCurrentImageUrl(placeholderUrl); // Show placeholder initially
+      if (productHintForGen) { // If hint exists, attempt generation
         setIsGeneratingImage(true);
-      } else {
+        setHasAttemptedGeneration(false); // Allow generation attempt
+      } else { // No hint, so no generation possible
         setIsGeneratingImage(false);
-        if (!productHint) setHasAttemptedGeneration(true); // No hint, so mark as "attempted"
+        setHasAttemptedGeneration(true); // Mark as "attempted" since no hint
       }
     }
-  }, [product.imageUrl, productHint, placeholderUrl, hasAttemptedGeneration]);
+  }, [product.imageUrl, productHintForGen, placeholderUrl]); // Removed hasAttemptedGeneration from deps to allow re-trigger on product change
 
   const loadImageWithAI = useCallback(async () => {
-    if (!productHint || !isGeneratingImage || hasAttemptedGeneration) {
-      if (isGeneratingImage) setIsGeneratingImage(false);
+    if (!productHintForGen || hasAttemptedGeneration) {
+      if(isGeneratingImage) setIsGeneratingImage(false);
       return;
     }
     
+    // Ensure isGeneratingImage is true before proceeding
+    if (!isGeneratingImage) {
+      return; 
+    }
+
     setHasAttemptedGeneration(true); 
 
     try {
-      const result = await generateProductImage({ aiHint: productHint });
+      const result = await generateProductImage({ aiHint: productHintForGen });
       if (result.imageDataUri) {
         setCurrentImageUrl(result.imageDataUri);
         await saveGeneratedImageToDB(product.id, result.imageDataUri, product.name);
@@ -121,16 +118,20 @@ export function ProductCard({ product }: ProductCardProps) {
     } finally {
       setIsGeneratingImage(false);
     }
-  }, [product.id, product.name, productHint, isGeneratingImage, hasAttemptedGeneration]);
+  }, [product.id, product.name, productHintForGen, isGeneratingImage, hasAttemptedGeneration]);
 
   useEffect(() => {
-    if (isGeneratingImage && productHint && !hasAttemptedGeneration) {
+    // Trigger AI image loading only if isGeneratingImage is true and no attempt has been made yet.
+    if (isGeneratingImage && productHintForGen && !hasAttemptedGeneration) {
       const timer = setTimeout(() => {
         loadImageWithAI();
       }, 200); 
       return () => clearTimeout(timer);
+    } else if (!productHintForGen && isGeneratingImage) {
+      // If no hint, but generation was flagged, turn it off.
+      setIsGeneratingImage(false);
     }
-  }, [isGeneratingImage, productHint, hasAttemptedGeneration, loadImageWithAI]);
+  }, [isGeneratingImage, productHintForGen, hasAttemptedGeneration, loadImageWithAI]);
 
   const handleAddToCart = (e: React.MouseEvent<HTMLButtonElement>) => {
     e.stopPropagation();
@@ -147,19 +148,19 @@ export function ProductCard({ product }: ProductCardProps) {
       <Link href={`/products/${product.id}`} className="flex flex-col flex-grow cursor-pointer">
         <CardHeader className="p-0">
           <div className="aspect-square relative w-full overflow-hidden bg-muted/20">
-            {(isGeneratingImage || (!currentImageUrl && !hasAttemptedGeneration)) && ( // Show skeleton if generating OR if no URL yet and no attempt made
+            {(isGeneratingImage) && ( 
               <Skeleton className="absolute inset-0 h-full w-full flex items-center justify-center z-10">
                 <ImageIcon className="h-12 w-12 text-muted-foreground/50 animate-pulse" />
               </Skeleton>
             )}
             <Image
               key={currentImageUrl} 
-              src={currentImageUrl || placeholderUrl} // Fallback to placeholder if currentImageUrl is somehow null/empty
+              src={currentImageUrl || placeholderUrl}
               alt={product.name}
               fill
               sizes="(max-width: 640px) 100vw, (max-width: 768px) 50vw, (max-width: 1024px) 33vw, 25vw"
               className={`object-cover transition-opacity duration-300 group-hover:scale-105 ${isGeneratingImage && currentImageUrl === placeholderUrl ? 'opacity-70' : 'opacity-100'}`}
-              data-ai-hint={productHint}
+              data-ai-hint={productHintForGen}
               priority={false} 
               onError={() => {
                 console.error(`Error loading image: ${currentImageUrl} for product ${product.name}`);
