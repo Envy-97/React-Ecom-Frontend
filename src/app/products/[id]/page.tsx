@@ -1,39 +1,107 @@
 
-import type { Metadata } from 'next';
+'use client';
+
 import Image from 'next/image';
 import Link from 'next/link';
 import { mockProducts } from '@/lib/mock-data';
 import type { Product } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { ChevronLeft } from 'lucide-react';
+import { ChevronLeft, ImageIcon } from 'lucide-react';
 import { ProductDetailClient } from '@/components/products/product-detail-client';
 import { PincodeChecker } from '@/components/products/pincode-checker';
+import { useState, useEffect } from 'react';
+import { generateProductImage } from '@/ai/flows/generate-product-image-flow';
+import { Skeleton } from '@/components/ui/skeleton';
 
 interface ProductDetailPageProps {
   params: { id: string };
 }
 
-async function getProduct(id: string): Promise<Product | undefined> {
-  // Simulate API call
-  return mockProducts.find((p) => p.id === id);
-}
+export default function ProductDetailPage({ params }: ProductDetailPageProps) {
+  const [product, setProduct] = useState<Product | null | undefined>(undefined);
+  const [currentImageUrl, setCurrentImageUrl] = useState<string | undefined>(undefined);
+  const [isGeneratingImage, setIsGeneratingImage] = useState<boolean>(true);
+  const [isLoadingProduct, setIsLoadingProduct] = useState<boolean>(true);
 
-export async function generateMetadata({ params }: ProductDetailPageProps): Promise<Metadata> {
-  const product = await getProduct(params.id);
-  if (!product) {
-    return {
-      title: 'Product Not Found - Ethereal Emporium',
-    };
+  useEffect(() => {
+    let isMounted = true;
+    async function fetchProduct() {
+      setIsLoadingProduct(true);
+      // Simulate API call to get product
+      await new Promise(resolve => setTimeout(resolve, 300)); // Simulate delay
+      const foundProduct = mockProducts.find((p) => p.id === params.id);
+      
+      if (isMounted) {
+        setProduct(foundProduct);
+        if (foundProduct) {
+          setCurrentImageUrl(foundProduct.imageUrl); // Start with placeholder
+          // Determine if image generation is needed
+          setIsGeneratingImage(!!(foundProduct.aiHint || foundProduct.name));
+        } else {
+            setIsGeneratingImage(false); // No product, no image to generate
+        }
+        setIsLoadingProduct(false);
+      }
+    }
+    fetchProduct();
+    return () => { isMounted = false; };
+  }, [params.id]);
+
+  const productHint = product?.aiHint || product?.name?.split(' ').slice(0, 2).join(' ').toLowerCase();
+
+  useEffect(() => {
+    let isMounted = true;
+    if (product && productHint) {
+      // isGeneratingImage should already be true from product load if hint exists
+      async function loadImageWithAI() {
+        try {
+          const result = await generateProductImage({ aiHint: productHint });
+          if (isMounted && result.imageDataUri) {
+            setCurrentImageUrl(result.imageDataUri);
+          }
+        } catch (error) {
+          console.error(`Failed to generate image for ${product.name}:`, error);
+        } finally {
+          if (isMounted) {
+            setIsGeneratingImage(false);
+          }
+        }
+      }
+       // Use a small timeout to allow initial placeholders to render before kicking off generation
+      const timer = setTimeout(() => {
+        loadImageWithAI();
+      }, 200);
+
+      return () => {
+        isMounted = false;
+        clearTimeout(timer);
+      };
+    } else if (product) { // Product loaded but no hint or name for hint
+        setIsGeneratingImage(false);
+    }
+  }, [product, productHint]);
+
+  if (isLoadingProduct) {
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <Skeleton className="h-8 w-48 mb-6 rounded-md" />
+        <Card className="overflow-hidden shadow-xl">
+          <div className="grid md:grid-cols-2 gap-0">
+            <Skeleton className="aspect-square md:aspect-auto md:min-h-[400px] min-h-[300px] rounded-none md:rounded-l-lg" />
+            <div className="flex flex-col p-6 space-y-4">
+              <Skeleton className="h-10 w-3/4 rounded-md" />
+              <Skeleton className="h-4 w-1/4 rounded-md" />
+              <Skeleton className="h-20 w-full rounded-md" />
+              <Skeleton className="h-12 w-full md:w-2/3 rounded-md" /> {/* Pincode checker area */}
+              <Skeleton className="h-10 w-1/3 rounded-md" />
+              <Skeleton className="h-12 w-full rounded-md" />
+            </div>
+          </div>
+        </Card>
+      </div>
+    );
   }
-  return {
-    title: `${product.name} - Ethereal Emporium`,
-    description: product.description,
-  };
-}
-
-export default async function ProductDetailPage({ params }: ProductDetailPageProps) {
-  const product = await getProduct(params.id);
 
   if (!product) {
     return (
@@ -52,8 +120,6 @@ export default async function ProductDetailPage({ params }: ProductDetailPagePro
     );
   }
   
-  const productHint = product.aiHint || product.name.split(' ').slice(0, 2).join(' ').toLowerCase();
-
   return (
     <div className="container mx-auto px-4 py-8">
       <div className="mb-6">
@@ -67,15 +133,35 @@ export default async function ProductDetailPage({ params }: ProductDetailPagePro
 
       <Card className="overflow-hidden shadow-xl">
         <div className="grid md:grid-cols-2 gap-0">
-          <div className="relative aspect-square md:aspect-auto md:min-h-[400px] min-h-[300px] bg-muted/30">
-            <Image
-              src={product.imageUrl}
-              alt={product.name}
-              fill 
-              sizes="(max-width: 768px) 100vw, 50vw"
-              className="object-contain p-4" 
-              data-ai-hint={productHint} 
-            />
+          <div className="relative aspect-square md:aspect-auto md:min-h-[400px] min-h-[300px] bg-muted/20">
+            {isGeneratingImage && (
+              <Skeleton className="absolute inset-0 h-full w-full flex items-center justify-center z-10">
+                 <ImageIcon className="h-16 w-16 text-muted-foreground/50 animate-pulse" />
+              </Skeleton>
+            )}
+            {currentImageUrl && (
+              <Image
+                key={currentImageUrl}
+                src={currentImageUrl}
+                alt={product.name}
+                fill
+                sizes="(max-width: 768px) 100vw, 50vw"
+                className={`object-contain p-4 transition-opacity duration-300 ${isGeneratingImage && currentImageUrl === product.imageUrl ? 'opacity-70' : 'opacity-100'}`}
+                data-ai-hint={productHint}
+                onLoadingComplete={() => {
+                     if (currentImageUrl === product.imageUrl && !productHint) {
+                        setIsGeneratingImage(false);
+                    }
+                }}
+                onError={() => {
+                    console.error(`Error loading image: ${currentImageUrl} for product ${product.name}`);
+                    if (currentImageUrl !== product.imageUrl) {
+                        setCurrentImageUrl(product.imageUrl);
+                    }
+                    setIsGeneratingImage(false);
+                }}
+              />
+            )}
           </div>
           <div className="flex flex-col">
             <CardHeader className="pb-4">
@@ -107,3 +193,4 @@ export default async function ProductDetailPage({ params }: ProductDetailPagePro
     </div>
   );
 }
+
